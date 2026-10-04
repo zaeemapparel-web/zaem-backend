@@ -1,17 +1,10 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// General AI model
-export const geminiModel = genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash',
-  generationConfig: {
-    temperature: 0.7,
-    maxOutputTokens: 500,
-  },
-});
+const MODEL_NAME = 'gemini-2.0-flash';
 
-// Chat function
+// ==================== AI CHATBOT ====================
 export async function chatWithAI(userMessage, context = '') {
   try {
     const prompt = `You are ZAEM AI Assistant — a friendly, helpful customer support assistant for ZAEM, a premium Pakistani fashion e-commerce store (zaemstore.com).
@@ -35,16 +28,19 @@ Customer: ${userMessage}
 
 ZAEM AI:`;
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    const result = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+    });
+
+    return result.text;
   } catch (error) {
     console.error('AI Chat Error:', error);
     throw new Error('AI service temporarily unavailable');
   }
 }
 
-// Product description generator
+// ==================== PRODUCT DESCRIPTION GENERATOR ====================
 export async function generateProductDescription(productInfo) {
   try {
     const prompt = `You are a professional e-commerce copywriter for ZAEM, a premium Pakistani fashion brand.
@@ -67,16 +63,19 @@ Requirements:
 
 Description:`;
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = await result.response;
-    return response.text().trim();
+    const result = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+    });
+
+    return result.text.trim();
   } catch (error) {
     console.error('Description Error:', error);
     throw new Error('Failed to generate description');
   }
 }
 
-// Size recommender
+// ==================== SIZE RECOMMENDER ====================
 export async function recommendSize(userInfo, productInfo) {
   try {
     const prompt = `You are a size expert for ZAEM fashion store.
@@ -94,21 +93,27 @@ Recommend the BEST size and explain briefly (2-3 lines). Format:
 RECOMMENDED: [size]
 REASON: [explanation]`;
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = await result.response;
-    return response.text().trim();
+    const result = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+    });
+
+    return result.text.trim();
   } catch (error) {
     console.error('Size Recommend Error:', error);
     throw new Error('Failed to recommend size');
   }
 }
 
-// AI Search
+// ==================== AI SEARCH ====================
 export async function aiSearch(query, products) {
   try {
-    const productList = products.map(p =>
-      `ID:${p.id} | ${p.name} | ${p.category?.name || ''} | PKR ${p.price}`
-    ).join('\n');
+    const productList = products
+      .map(
+        (p) =>
+          `ID:${p.id} | ${p.name} | ${p.category?.name || ''} | PKR ${p.price}`
+      )
+      .join('\n');
 
     const prompt = `You are a search assistant for ZAEM store.
 
@@ -121,9 +126,12 @@ Return ONLY the IDs of the TOP 6 most relevant products, comma-separated. If no 
 
 Format: id1,id2,id3`;
 
-    const result = await geminiModel.generateContent(prompt);
-    const response = await result.response;
-    return response.text().trim();
+    const result = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+    });
+
+    return result.text.trim();
   } catch (error) {
     console.error('Search Error:', error);
     return 'NONE';
