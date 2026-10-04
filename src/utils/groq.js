@@ -1,13 +1,15 @@
-import { GoogleGenAI } from '@google/genai';
+import Groq from 'groq-sdk';
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const groq = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
+});
 
-const MODEL_NAME = 'gemini-2.5-flash';
+const MODEL_NAME = 'llama-3.3-70b-versatile';
 
 // ==================== AI CHATBOT ====================
 export async function chatWithAI(userMessage, context = '') {
   try {
-    const prompt = `You are ZAEM AI Assistant — a friendly, helpful customer support assistant for ZAEM, a premium Pakistani fashion e-commerce store (zaemstore.com).
+    const systemPrompt = `You are ZAEM AI Assistant — a friendly, helpful customer support assistant for ZAEM, a premium Pakistani fashion e-commerce store (zaemstore.com).
 
 ZAEM sells:
 - Women's clothing (unstitched, ready-to-wear, winter)
@@ -21,19 +23,21 @@ Key info:
 - Payment: COD, JazzCash, Easypaisa
 - Contact: zaeemapparel@gmail.com, +92 319 3773788
 
-Be friendly, concise, and helpful. Reply in the same language the customer uses (English, Urdu, or Roman Urdu).
+Be friendly, concise, and helpful. Reply in the same language the customer uses (English, Urdu, or Roman Urdu).`;
 
-${context ? `Context: ${context}\n` : ''}
-Customer: ${userMessage}
+    const userPrompt = `${context ? `Previous conversation:\n${context}\n\n` : ''}Customer: ${userMessage}`;
 
-ZAEM AI:`;
-
-    const result = await ai.models.generateContent({
+    const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      contents: prompt,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 500,
     });
 
-    return result.text;
+    return completion.choices[0]?.message?.content || 'Sorry, no response.';
   } catch (error) {
     console.error('AI Chat Error:', error);
     throw new Error('AI service temporarily unavailable');
@@ -63,12 +67,14 @@ Requirements:
 
 Description:`;
 
-    const result = await ai.models.generateContent({
+    const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      contents: prompt,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.7,
+      max_tokens: 300,
     });
 
-    return result.text.trim();
+    return completion.choices[0]?.message?.content?.trim() || '';
   } catch (error) {
     console.error('Description Error:', error);
     throw new Error('Failed to generate description');
@@ -93,12 +99,14 @@ Recommend the BEST size and explain briefly (2-3 lines). Format:
 RECOMMENDED: [size]
 REASON: [explanation]`;
 
-    const result = await ai.models.generateContent({
+    const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      contents: prompt,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.5,
+      max_tokens: 200,
     });
 
-    return result.text.trim();
+    return completion.choices[0]?.message?.content?.trim() || '';
   } catch (error) {
     console.error('Size Recommend Error:', error);
     throw new Error('Failed to recommend size');
@@ -126,12 +134,14 @@ Return ONLY the IDs of the TOP 6 most relevant products, comma-separated. If no 
 
 Format: id1,id2,id3`;
 
-    const result = await ai.models.generateContent({
+    const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      contents: prompt,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 100,
     });
 
-    return result.text.trim();
+    return completion.choices[0]?.message?.content?.trim() || 'NONE';
   } catch (error) {
     console.error('Search Error:', error);
     return 'NONE';

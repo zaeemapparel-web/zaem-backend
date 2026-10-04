@@ -4,7 +4,7 @@ import {
   generateProductDescription,
   recommendSize,
   aiSearch,
-} from '../utils/gemini.js';
+ } from '../utils/groq.js';
 import prisma from '../utils/prisma.js';
 
 const router = express.Router();
