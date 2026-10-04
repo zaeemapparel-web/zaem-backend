@@ -11,10 +11,59 @@ import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
-// ==================== AI CHATBOT (ULTRA PRO) ====================
+// ==================== HELPER: Extract Products from AI Reply ====================
+function extractMentionedProducts(reply, allProducts) {
+  if (!reply || !allProducts || allProducts.length === 0) return [];
+
+  const mentioned = [];
+  const seenIds = new Set();
+  const replyLower = reply.toLowerCase();
+
+  // Split reply into lines for more accurate matching
+  const lines = reply.split('\n');
+
+  for (const product of allProducts) {
+    if (seenIds.has(product.id)) continue;
+
+    const nameLower = product.name.toLowerCase();
+    const slugLower = product.slug.toLowerCase();
+
+    // Match by:
+    // 1. Product name in reply
+    // 2. Product slug in reply
+    // 3. Product link in reply
+    const isMentioned =
+      replyLower.includes(nameLower) ||
+      replyLower.includes(slugLower) ||
+      reply.includes(`/product/${product.slug}`) ||
+      lines.some((line) => line.toLowerCase().includes(nameLower));
+
+    if (isMentioned) {
+      mentioned.push({
+        id: product.id,
+        name: product.name,
+        slug: product.slug,
+        price: product.price,
+        comparePrice: product.comparePrice,
+        images: product.images || [],
+        category: product.category,
+        stock: product.stock,
+        sizes: product.sizes,
+        colors: product.colors,
+      });
+      seenIds.add(product.id);
+    }
+
+    if (mentioned.length >= 4) break;
+  }
+
+  return mentioned;
+}
+
+// ==================== AI CHATBOT (DUAL MODE: SHOP + SUPPORT) ====================
 router.post('/chat', async (req, res) => {
   try {
-    const { message, history, image } = req.body;
+    const { message, history, image, mode = 'support' } = req.body;
 
     if (!message || message.trim().length === 0) {
       return res.status(400).json({
@@ -23,7 +72,10 @@ router.post('/chat', async (req, res) => {
       });
     }
 
-    // 1. Load all products (for AI knowledge)
+    // Validate mode
+    const validMode = mode === 'shop' ? 'shop' : 'support';
+
+    // ============ 1. Load all products ============
     const products = await prisma.product.findMany({
       where: { isActive: true },
       select: {
@@ -35,20 +87,23 @@ router.post('/chat', async (req, res) => {
         stock: true,
         sizes: true,
         colors: true,
+        images: true,
         category: { select: { name: true, slug: true } },
       },
       take: 100,
     });
 
-    // 2. Load categories
+    // ============ 2. Load categories ============
     const categories = await prisma.category.findMany({
-  select: { name: true, slug: true },
-  take: 50,
-});
-    // 3. Try to get user from token (optional)
+      select: { name: true, slug: true },
+      take: 50,
+    });
+
+    // ============ 3. Get user context from token ============
     let userName = '';
     let isLoggedIn = false;
     let userOrders = [];
+    let userCartItems = [];
 
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -77,32 +132,65 @@ router.post('/chat', async (req, res) => {
             orderBy: { createdAt: 'desc' },
             take: 10,
           });
+
+          // Load cart items (for shop mode recommendations)
+          const cart = await prisma.cart.findUnique({
+            where: { userId: user.id },
+            include: {
+              items: {
+                include: {
+                  product: { select: { name: true, category: { select: { name: true } } } },
+                },
+              },
+            },
+          });
+
+          if (cart?.items) {
+            userCartItems = cart.items.map(
+              (item) => `${item.product.name} (${item.product.category?.name || 'N/A'})`
+            );
+          }
         }
       } catch (err) {
-        // Token invalid — continue as guest
+        // Guest mode — continue silently
         console.log('Guest mode (invalid token)');
       }
     }
 
-    // 4. Build context from history
+    // ============ 4. Build context from history ============
     const contextStr = history
       ? history
-          .map((h) => `${h.role === 'user' ? 'Customer' : 'ZAEM AI'}: ${h.content}`)
+          .map(
+            (h) =>
+              `${h.role === 'user' ? 'Customer' : 'ZAEM AI'}: ${h.content}`
+          )
           .join('\n')
       : '';
 
-    // 5. Get AI response with full shop data
+    // ============ 5. Get AI response ============
     const reply = await chatWithAI(message, contextStr, image, {
       products,
       categories,
       userOrders,
       userName,
       isLoggedIn,
+      mode: validMode,
+      cartItems: userCartItems,
     });
+
+    // ============ 6. Extract product cards (only in shop mode) ============
+    let mentionedProducts = [];
+    if (validMode === 'shop') {
+      mentionedProducts = extractMentionedProducts(reply, products);
+    }
 
     res.json({
       success: true,
-      data: { reply },
+      data: {
+        reply,
+        products: mentionedProducts,
+        mode: validMode,
+      },
     });
   } catch (error) {
     console.error('Chat error:', error);
@@ -199,7 +287,11 @@ router.post('/recommendations', async (req, res) => {
     if (productId) {
       currentProduct = await prisma.product.findUnique({
         where: { id: productId },
-        select: { name: true, category: { select: { name: true } }, price: true },
+        select: {
+          name: true,
+          category: { select: { name: true } },
+          price: true,
+        },
       });
     }
 
