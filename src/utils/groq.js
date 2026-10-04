@@ -7,7 +7,7 @@ const groq = new Groq({
 const MODEL_NAME = 'openai/gpt-oss-120b';
 
 // ==================== AI CHATBOT ====================
-export async function chatWithAI(userMessage, context = '') {
+export async function chatWithAI(userMessage, context = '', image = null) {
   try {
     const systemPrompt = `You are ZAEM AI Assistant — a friendly, helpful customer support assistant for ZAEM, a premium Pakistani fashion e-commerce store (zaemstore.com).
 
@@ -23,18 +23,42 @@ Key info:
 - Payment: COD, JazzCash, Easypaisa
 - Contact: zaeemapparel@gmail.com, +92 319 3773788
 
-Be friendly, concise, and helpful. Reply in the same language the customer uses (English, Urdu, or Roman Urdu).`;
+IMPORTANT:
+- Format your responses with **bold** for headers/categories
+- Use line breaks for readability
+- Keep responses concise (short paragraphs)
+- Be friendly and use relevant emojis occasionally
+- Reply in the same language the customer uses (English, Urdu, or Roman Urdu)`;
 
-    const userPrompt = `${context ? `Previous conversation:\n${context}\n\n` : ''}Customer: ${userMessage}`;
+    const messages = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    if (context) {
+      messages.push({
+        role: 'user',
+        content: `Previous conversation:\n${context}`,
+      });
+    }
+
+    // Build user content (with image if provided)
+    if (image) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: userMessage },
+          { type: 'image_url', image_url: { url: image } },
+        ],
+      });
+    } else {
+      messages.push({ role: 'user', content: userMessage });
+    }
 
     const completion = await groq.chat.completions.create({
       model: MODEL_NAME,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
+      messages,
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: 600,
     });
 
     return completion.choices[0]?.message?.content || 'Sorry, no response.';
@@ -43,7 +67,6 @@ Be friendly, concise, and helpful. Reply in the same language the customer uses 
     throw new Error('AI service temporarily unavailable');
   }
 }
-
 // ==================== PRODUCT DESCRIPTION GENERATOR ====================
 export async function generateProductDescription(productInfo) {
   try {

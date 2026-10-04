@@ -12,7 +12,7 @@ const router = express.Router();
 // ==================== AI CHATBOT ====================
 router.post('/chat', async (req, res) => {
   try {
-    const { message, history } = req.body;
+    const { message, history, image } = req.body;
 
     if (!message || message.trim().length === 0) {
       return res.status(400).json({
@@ -25,7 +25,7 @@ router.post('/chat', async (req, res) => {
       ? `Previous conversation:\n${history.map(h => `${h.role}: ${h.content}`).join('\n')}`
       : '';
 
-    const reply = await chatWithAI(message, context);
+    const reply = await chatWithAI(message, context, image);
 
     res.json({
       success: true,
