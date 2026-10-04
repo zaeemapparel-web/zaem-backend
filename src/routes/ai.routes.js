@@ -42,11 +42,9 @@ router.post('/chat', async (req, res) => {
 
     // 2. Load categories
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
-      select: { name: true, slug: true },
-      take: 50,
-    });
-
+  select: { name: true, slug: true },
+  take: 50,
+});
     // 3. Try to get user from token (optional)
     let userName = '';
     let isLoggedIn = false;
