@@ -5,7 +5,7 @@ const groq = new Groq({
 });
 
 // Vision-capable model (handles text + images)
-const MODEL_NAME = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const MODEL_NAME = 'qwen/qwen3.8-27b';
 
 // ==================== AI CHATBOT ====================
 export async function chatWithAI(userMessage, context = '', image = null) {
