@@ -5,19 +5,13 @@ import {
   recommendSize,
   getRecommendations,
   aiSearch,
- } from '../utils/groq.js';
+} from '../utils/groq.js';
 import prisma from '../utils/prisma.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
-import {
-  chatWithAI,
-  generateProductDescription,
-  recommendSize,
-  getRecommendations,
-  aiSearch,
-} from '../utils/groq.js';
 
-// ==================== AI CHATBOT ====================
+// ==================== AI CHATBOT (ULTRA PRO) ====================
 router.post('/chat', async (req, res) => {
   try {
     const { message, history, image } = req.body;
@@ -29,11 +23,84 @@ router.post('/chat', async (req, res) => {
       });
     }
 
-    const context = history
-      ? `Previous conversation:\n${history.map(h => `${h.role}: ${h.content}`).join('\n')}`
+    // 1. Load all products (for AI knowledge)
+    const products = await prisma.product.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        price: true,
+        comparePrice: true,
+        stock: true,
+        sizes: true,
+        colors: true,
+        category: { select: { name: true, slug: true } },
+      },
+      take: 100,
+    });
+
+    // 2. Load categories
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      select: { name: true, slug: true },
+      take: 50,
+    });
+
+    // 3. Try to get user from token (optional)
+    let userName = '';
+    let isLoggedIn = false;
+    let userOrders = [];
+
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        const user = await prisma.user.findUnique({
+          where: { id: decoded.userId || decoded.id },
+          select: { id: true, name: true, email: true },
+        });
+
+        if (user) {
+          userName = user.name;
+          isLoggedIn = true;
+
+          // Load recent orders
+          userOrders = await prisma.order.findMany({
+            where: { userId: user.id },
+            select: {
+              orderNumber: true,
+              total: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          });
+        }
+      } catch (err) {
+        // Token invalid — continue as guest
+        console.log('Guest mode (invalid token)');
+      }
+    }
+
+    // 4. Build context from history
+    const contextStr = history
+      ? history
+          .map((h) => `${h.role === 'user' ? 'Customer' : 'ZAEM AI'}: ${h.content}`)
+          .join('\n')
       : '';
 
-    const reply = await chatWithAI(message, context, image);
+    // 5. Get AI response with full shop data
+    const reply = await chatWithAI(message, contextStr, image, {
+      products,
+      categories,
+      userOrders,
+      userName,
+      isLoggedIn,
+    });
 
     res.json({
       success: true,
@@ -84,98 +151,6 @@ router.post('/generate-description', async (req, res) => {
 // ==================== SIZE RECOMMENDER ====================
 router.post('/recommend-size', async (req, res) => {
   try {
-    const { height, weight, chest, waist, productId } = req.body;
-
-    if (!height || !weight || !productId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Height, weight, and productId required',
-      });
-    }
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      select: { name: true, sizes: true },
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not found',
-      });
-    }
-
-    const recommendation = await recommendSize(
-      { height, weight, chest, waist },
-      product
-    );
-
-    res.json({
-      success: true,
-      data: { recommendation },
-    });
-  } catch (error) {
-    console.error('Size recommend error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to recommend size',
-    });
-  }
-});
-
-// ==================== AI SEARCH ====================
-router.post('/search', async (req, res) => {
-  try {
-    const { query } = req.body;
-
-    if (!query || query.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Query required',
-      });
-    }
-
-    // Get all active products
-    const products = await prisma.product.findMany({
-      where: { isActive: true },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        slug: true,
-        images: true,
-        category: { select: { name: true, slug: true } },
-      },
-      take: 50,
-    });
-
-    const idsString = await aiSearch(query, products);
-
-    if (idsString === 'NONE' || idsString.includes('NONE')) {
-      return res.json({
-        success: true,
-        data: { products: [] },
-      });
-    }
-
-    const ids = idsString.split(',').map(id => id.trim()).filter(Boolean);
-    const matched = products.filter(p => ids.includes(p.id));
-
-    res.json({
-      success: true,
-      data: { products: matched },
-    });
-  } catch (error) {
-    console.error('AI Search error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Search failed',
-    });
-  }
-});
-// ==================== SIZE RECOMMENDER ====================
-router.post('/recommend-size', async (req, res) => {
-  try {
     const { height, weight, chest, waist, fit, productId } = req.body;
 
     if (!height || !weight || !productId) {
@@ -207,10 +182,7 @@ router.post('/recommend-size', async (req, res) => {
       }
     );
 
-    res.json({
-      success: true,
-      data: result,
-    });
+    res.json({ success: true, data: result });
   } catch (error) {
     console.error('Size recommend error:', error);
     res.status(500).json({
@@ -243,6 +215,7 @@ router.post('/recommendations', async (req, res) => {
         slug: true,
         sizes: true,
         colors: true,
+        comparePrice: true,
         category: { select: { name: true, slug: true } },
       },
       take: 50,
@@ -261,17 +234,11 @@ router.post('/recommendations', async (req, res) => {
       cartItems,
     });
 
-    const recommended = allProducts.filter((p) => ids.includes(p.id));
-
-    // Sort by AI order
-    const sorted = ids
-      .map((id) => recommended.find((p) => p.id === id))
+    const recommended = ids
+      .map((id) => allProducts.find((p) => p.id === id))
       .filter(Boolean);
 
-    res.json({
-      success: true,
-      data: { products: sorted },
-    });
+    res.json({ success: true, data: { products: recommended } });
   } catch (error) {
     console.error('Recommendations error:', error);
     res.status(500).json({
@@ -303,6 +270,7 @@ router.post('/search', async (req, res) => {
         images: true,
         sizes: true,
         colors: true,
+        comparePrice: true,
         category: { select: { name: true, slug: true } },
       },
       take: 100,
