@@ -4,7 +4,7 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const MODEL_NAME = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const MODEL_NAME = 'qwen/qwen3.8-27b';
 
 // ==================== AI CHATBOT (ULTRA PRO) ====================
 export async function chatWithAI(
