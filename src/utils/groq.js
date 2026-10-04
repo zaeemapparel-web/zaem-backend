@@ -4,7 +4,8 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const MODEL_NAME = 'openai/gpt-oss-120b';
+// Vision-capable model (handles text + images)
+const MODEL_NAME = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 // ==================== AI CHATBOT ====================
 export async function chatWithAI(userMessage, context = '', image = null) {
@@ -24,15 +25,14 @@ Key info:
 - Contact: zaeemapparel@gmail.com, +92 319 3773788
 
 IMPORTANT:
-- Format your responses with **bold** for headers/categories
+- Format responses with **bold** for headers/categories
 - Use line breaks for readability
 - Keep responses concise (short paragraphs)
-- Be friendly and use relevant emojis occasionally
-- Reply in the same language the customer uses (English, Urdu, or Roman Urdu)`;
+- Be friendly with relevant emojis
+- Reply in the customer's language (English, Urdu, or Roman Urdu)
+- If the customer sends an image, analyze it and respond about what you see`;
 
-    const messages = [
-      { role: 'system', content: systemPrompt },
-    ];
+    const messages = [{ role: 'system', content: systemPrompt }];
 
     if (context) {
       messages.push({
@@ -41,12 +41,13 @@ IMPORTANT:
       });
     }
 
-    // Build user content (with image if provided)
+    // Build user content
     if (image) {
+      // Vision request
       messages.push({
         role: 'user',
         content: [
-          { type: 'text', text: userMessage },
+          { type: 'text', text: userMessage || 'What do you see in this image?' },
           { type: 'image_url', image_url: { url: image } },
         ],
       });
@@ -58,16 +59,17 @@ IMPORTANT:
       model: MODEL_NAME,
       messages,
       temperature: 0.7,
-      max_tokens: 600,
+      max_tokens: 800,
     });
 
     return completion.choices[0]?.message?.content || 'Sorry, no response.';
   } catch (error) {
-    console.error('AI Chat Error:', error);
+    console.error('AI Chat Error:', error?.error || error);
     throw new Error('AI service temporarily unavailable');
   }
 }
-// ==================== PRODUCT DESCRIPTION GENERATOR ====================
+
+// ==================== PRODUCT DESCRIPTION ====================
 export async function generateProductDescription(productInfo) {
   try {
     const prompt = `You are a professional e-commerce copywriter for ZAEM, a premium Pakistani fashion brand.
