@@ -9,8 +9,7 @@ import { protect } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.use(protect);
-
+router.use(protect); // All routes below this line require authentication
 router.get('/', getWishlist);
 router.post('/', addToWishlist);
 router.delete('/:productId', removeFromWishlist);

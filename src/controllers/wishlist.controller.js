@@ -1,16 +1,21 @@
 import prisma from '../utils/prisma.js';
 
-/**
- * GET WISHLIST — GET /api/wishlist
- */
+// ==================== GET WISHLIST ====================
 export const getWishlist = async (req, res) => {
   try {
-    const wishlist = await prisma.wishlistItem.findMany({
+    const items = await prisma.wishlistItem.findMany({
       where: { userId: req.user.id },
       include: {
         product: {
-          include: {
-            category: { select: { id: true, name: true, slug: true } },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            price: true,
+            comparePrice: true,
+            images: true,
+            stock: true,
+            category: { select: { name: true, slug: true } },
           },
         },
       },
@@ -19,21 +24,19 @@ export const getWishlist = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      count: wishlist.length,
-      data: { wishlist },
+      count: items.length,
+      data: { wishlist: items },
     });
   } catch (error) {
     console.error('Get wishlist error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error fetching wishlist.',
+      message: 'Server error.',
     });
   }
 };
 
-/**
- * ADD TO WISHLIST — POST /api/wishlist
- */
+// ==================== ADD TO WISHLIST ====================
 export const addToWishlist = async (req, res) => {
   try {
     const { productId } = req.body;
@@ -58,22 +61,45 @@ export const addToWishlist = async (req, res) => {
     }
 
     // Check if already in wishlist
-    const existing = await prisma.wishlistItem.findFirst({
-      where: { userId: req.user.id, productId },
+    const existing = await prisma.wishlistItem.findUnique({
+      where: {
+        userId_productId: {
+          userId: req.user.id,
+          productId,
+        },
+      },
     });
 
     if (existing) {
-      return res.status(200).json({
-        success: true,
-        message: 'Already in wishlist.',
-        data: { item: existing },
+      return res.status(409).json({
+        success: false,
+        message: 'Product already in wishlist.',
       });
     }
 
-    // Create
+    // Add with price snapshot for price drop alerts
     const item = await prisma.wishlistItem.create({
-      data: { userId: req.user.id, productId },
-      include: { product: true },
+      data: {
+        userId: req.user.id,
+        productId,
+        priceAtAdd: product.price,
+        notifyOnDrop: true,
+        notifyOnStock: true,
+      },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            price: true,
+            comparePrice: true,
+            images: true,
+            stock: true,
+            category: { select: { name: true, slug: true } },
+          },
+        },
+      },
     });
 
     res.status(201).json({
@@ -85,30 +111,40 @@ export const addToWishlist = async (req, res) => {
     console.error('Add to wishlist error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error adding to wishlist.',
+      message: 'Server error.',
     });
   }
 };
 
-/**
- * REMOVE FROM WISHLIST — DELETE /api/wishlist/:productId
- */
+// ==================== REMOVE FROM WISHLIST ====================
 export const removeFromWishlist = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const item = await prisma.wishlistItem.findFirst({
-      where: { userId: req.user.id, productId },
+    const existing = await prisma.wishlistItem.findUnique({
+      where: {
+        userId_productId: {
+          userId: req.user.id,
+          productId,
+        },
+      },
     });
 
-    if (!item) {
+    if (!existing) {
       return res.status(404).json({
         success: false,
-        message: 'Not in wishlist.',
+        message: 'Item not in wishlist.',
       });
     }
 
-    await prisma.wishlistItem.delete({ where: { id: item.id } });
+    await prisma.wishlistItem.delete({
+      where: {
+        userId_productId: {
+          userId: req.user.id,
+          productId,
+        },
+      },
+    });
 
     res.status(200).json({
       success: true,
@@ -118,20 +154,23 @@ export const removeFromWishlist = async (req, res) => {
     console.error('Remove from wishlist error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error removing from wishlist.',
+      message: 'Server error.',
     });
   }
 };
 
-/**
- * CHECK IF IN WISHLIST — GET /api/wishlist/check/:productId
- */
+// ==================== CHECK WISHLIST ====================
 export const checkWishlist = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    const item = await prisma.wishlistItem.findFirst({
-      where: { userId: req.user.id, productId },
+    const item = await prisma.wishlistItem.findUnique({
+      where: {
+        userId_productId: {
+          userId: req.user.id,
+          productId,
+        },
+      },
     });
 
     res.status(200).json({
@@ -140,6 +179,47 @@ export const checkWishlist = async (req, res) => {
     });
   } catch (error) {
     console.error('Check wishlist error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error.',
+    });
+  }
+};
+
+// ==================== UPDATE NOTIFICATIONS ====================
+export const updateNotify = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { notifyOnDrop, notifyOnStock } = req.body;
+
+    const data = {};
+    if (typeof notifyOnDrop === 'boolean') data.notifyOnDrop = notifyOnDrop;
+    if (typeof notifyOnStock === 'boolean') data.notifyOnStock = notifyOnStock;
+
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields to update.',
+      });
+    }
+
+    const item = await prisma.wishlistItem.update({
+      where: {
+        userId_productId: {
+          userId: req.user.id,
+          productId,
+        },
+      },
+      data,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Notification settings updated.',
+      data: { item },
+    });
+  } catch (error) {
+    console.error('Update notify error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error.',

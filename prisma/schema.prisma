@@ -13,6 +13,8 @@ datasource db {
 enum Role {
   USER
   ADMIN
+  MANAGER
+  STAFF
 }
 
 enum OrderStatus {
@@ -30,6 +32,7 @@ enum PaymentMethod {
   JAZZCASH
   EASYPAISA
   CARD
+  BANK_TRANSFER
 }
 
 enum PaymentStatus {
@@ -37,6 +40,40 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+  FREE_SHIPPING
+  BUY_X_GET_Y
+}
+
+enum LoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum LoyaltyAction {
+  ORDER_PLACED
+  REVIEW_WRITTEN
+  PHOTO_REVIEW
+  REFERRAL
+  SIGNUP
+  BIRTHDAY
+  REDEEMED
+  ADMIN_ADJUSTMENT
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PRICE_DROP
+  BACK_IN_STOCK
+  PROMOTION
+  LOYALTY
+  REVIEW_REPLY
 }
 
 // ==================== USER ====================
@@ -49,12 +86,25 @@ model User {
   password  String
   role      Role     @default(USER)
   isActive  Boolean  @default(true)
+  avatar    String?
+  dateOfBirth DateTime?
 
-  addresses Address[]
-  orders    Order[]
-  reviews   Review[]
-  cart      Cart?
-  wishlist  WishlistItem[]
+  // Loyalty
+  loyaltyPoints    Int          @default(0)
+  totalSpent       Float        @default(0)
+  tier             LoyaltyTier  @default(BRONZE)
+  referralCode     String?      
+  referredBy       String?
+
+  addresses       Address[]
+  orders          Order[]
+  reviews         Review[]
+  reviewHelpful   ReviewHelpful[]
+  cart            Cart?
+  wishlist        WishlistItem[]
+  loyaltyHistory  LoyaltyTransaction[]
+  notifications   Notification[]
+  couponUsage     CouponUsage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -126,6 +176,11 @@ model Product {
   sku          String?  @unique
   isFeatured   Boolean  @default(false)
   isActive     Boolean  @default(true)
+  tags         String[]
+
+  // Stats
+  viewCount    Int @default(0)
+  soldCount    Int @default(0)
 
   category   Category        @relation(fields: [categoryId], references: [id])
   cartItems  CartItem[]
@@ -138,6 +193,7 @@ model Product {
 
   @@index([categoryId])
   @@index([isFeatured])
+  @@index([price])
   @@map("products")
 }
 
@@ -184,23 +240,34 @@ model Order {
   subtotal      Float
   shippingCost  Float         @default(0)
   discount      Float         @default(0)
+  tax           Float         @default(0)
   total         Float
   status        OrderStatus   @default(PENDING)
   paymentMethod PaymentMethod
   paymentStatus PaymentStatus @default(PENDING)
   paymentRef    String?
   notes         String?
-  promoCode     String?
+  couponId      String?
+  couponCode    String?
+  loyaltyUsed   Int           @default(0)
 
   user    User        @relation(fields: [userId], references: [id])
   address Address?    @relation(fields: [addressId], references: [id])
   items   OrderItem[]
+  coupon  Coupon?     @relation(fields: [couponId], references: [id])
+
+  trackingNumber String?
+  trackingUrl    String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  cancelledAt    DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
   @@index([status])
+  @@index([createdAt])
   @@map("orders")
 }
 
@@ -221,33 +288,59 @@ model OrderItem {
   @@map("order_items")
 }
 
-// ==================== REVIEW ====================
+// ==================== REVIEW (UPGRADED) ====================
 
 model Review {
-  id        String  @id @default(cuid())
-  userId    String
-  productId String
-  rating    Int
-  title     String?
-  comment   String
-  isApproved Boolean @default(false)
+  id             String   @id @default(cuid())
+  userId         String
+  productId      String
+  rating         Int
+  title          String?
+  comment        String
+  images         String[] // NEW: Up to 3 photos
+  isApproved     Boolean  @default(false)
+  isVerified     Boolean  @default(false) // NEW: Verified purchase
+  helpfulCount   Int      @default(0) // NEW
+  adminReply     String? // NEW
+  adminRepliedAt DateTime? // NEW
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  helpful ReviewHelpful[] // NEW
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([userId, productId])
+  @@index([productId])
+  @@index([isApproved])
   @@map("reviews")
 }
 
-// ==================== WISHLIST ====================
+model ReviewHelpful {
+  id       String @id @default(cuid())
+  reviewId String
+  userId   String
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([reviewId, userId])
+  @@map("review_helpful")
+}
+
+// ==================== WISHLIST (UPGRADED) ====================
 
 model WishlistItem {
-  id        String @id @default(cuid())
-  userId    String
-  productId String
+  id              String    @id @default(cuid())
+  userId          String
+  productId       String
+  priceAtAdd      Float? // NEW: Price when added (for price drop)
+  notifyOnDrop    Boolean   @default(true) // NEW
+  notifyOnStock   Boolean   @default(true) // NEW
+  notifiedAt      DateTime? // NEW: Last notification sent
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -255,5 +348,107 @@ model WishlistItem {
   createdAt DateTime @default(now())
 
   @@unique([userId, productId])
+  @@index([userId])
   @@map("wishlist_items")
+}
+
+// ==================== COUPON (NEW) ====================
+
+model Coupon {
+  id              String     @id @default(cuid())
+  code            String     @unique
+  description     String?
+  type            CouponType
+  value           Float      // % or amount
+  minOrderAmount  Float      @default(0)
+  maxDiscount     Float?     // Cap for percentage
+  maxUses         Int?       // Total usage limit
+  usedCount       Int        @default(0)
+  maxUsesPerUser  Int        @default(1)
+  buyQuantity     Int?       // For BUY_X_GET_Y
+  getQuantity     Int?       // For BUY_X_GET_Y
+  isActive        Boolean    @default(true)
+  isFirstOrder    Boolean    @default(false)
+  startsAt        DateTime   @default(now())
+  expiresAt       DateTime?
+  applicableCategories String[] // Category IDs
+  applicableProducts   String[] // Product IDs
+
+  orders Order[]
+  usage  CouponUsage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id       String @id @default(cuid())
+  couponId String
+  userId   String
+  orderId  String?
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([couponId, userId])
+  @@map("coupon_usage")
+}
+
+// ==================== LOYALTY (NEW) ====================
+
+model LoyaltyTransaction {
+  id          String         @id @default(cuid())
+  userId      String
+  points      Int            // Positive for earn, negative for redeem
+  action      LoyaltyAction
+  description String
+  orderId     String?
+  reviewId    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("loyalty_transactions")
+}
+
+// ==================== NOTIFICATION (NEW) ====================
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  imageUrl  String?
+  isRead    Boolean          @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ==================== NEWSLETTER (NEW) ====================
+
+model Newsletter {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  isActive  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("newsletters")
 }
