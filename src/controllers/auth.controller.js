@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
 import { generateToken } from '../utils/jwt.js';
-
+import crypto from "crypto";
+import { sendPasswordResetEmail } from "../utils/email.js";
 /**
  * REGISTER — POST /api/auth/register
  */
@@ -252,6 +253,169 @@ export const changePassword = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error changing password.',
+    });
+  }
+};
+// ==================== FORGOT PASSWORD ====================
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    // Find user
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() },
+    });
+
+    // Always return success (security — don't reveal if email exists)
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: "If an account exists, a reset link has been sent",
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Save token to user
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpiry,
+      },
+    });
+
+    // Build reset URL
+    const frontendUrl =
+      process.env.FRONTEND_URL || "https://zaemstore.com";
+    const resetUrl = `${frontendUrl}/account/reset-password?token=${resetToken}`;
+
+    // Send email
+    sendPasswordResetEmail(user, resetUrl).catch((err) =>
+      console.error("Password reset email failed:", err)
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "If an account exists, a reset link has been sent",
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// ==================== VALIDATE RESET TOKEN ====================
+export const validateResetToken = async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "Token is required",
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired token",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Token is valid",
+    });
+  } catch (error) {
+    console.error("Validate token error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+// ==================== RESET PASSWORD ====================
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Token and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
+    }
+
+    // Find user with valid token
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired token",
+      });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 };

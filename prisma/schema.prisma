@@ -89,6 +89,10 @@ model User {
   avatar    String?
   dateOfBirth DateTime?
 
+  // ⭐ Password Reset Fields (NEW)
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+
   // Loyalty
   loyaltyPoints    Int          @default(0)
   totalSpent       Float        @default(0)
@@ -109,6 +113,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([resetToken])
   @@map("users")
 }
 
@@ -297,16 +302,16 @@ model Review {
   rating         Int
   title          String?
   comment        String
-  images         String[] // NEW: Up to 3 photos
+  images         String[]
   isApproved     Boolean  @default(false)
-  isVerified     Boolean  @default(false) // NEW: Verified purchase
-  helpfulCount   Int      @default(0) // NEW
-  adminReply     String? // NEW
-  adminRepliedAt DateTime? // NEW
+  isVerified     Boolean  @default(false)
+  helpfulCount   Int      @default(0)
+  adminReply     String?
+  adminRepliedAt DateTime?
 
   user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  helpful ReviewHelpful[] // NEW
+  helpful ReviewHelpful[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -337,10 +342,10 @@ model WishlistItem {
   id              String    @id @default(cuid())
   userId          String
   productId       String
-  priceAtAdd      Float? // NEW: Price when added (for price drop)
-  notifyOnDrop    Boolean   @default(true) // NEW
-  notifyOnStock   Boolean   @default(true) // NEW
-  notifiedAt      DateTime? // NEW: Last notification sent
+  priceAtAdd      Float?
+  notifyOnDrop    Boolean   @default(true)
+  notifyOnStock   Boolean   @default(true)
+  notifiedAt      DateTime?
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -359,20 +364,20 @@ model Coupon {
   code            String     @unique
   description     String?
   type            CouponType
-  value           Float      // % or amount
+  value           Float
   minOrderAmount  Float      @default(0)
-  maxDiscount     Float?     // Cap for percentage
-  maxUses         Int?       // Total usage limit
+  maxDiscount     Float?
+  maxUses         Int?
   usedCount       Int        @default(0)
   maxUsesPerUser  Int        @default(1)
-  buyQuantity     Int?       // For BUY_X_GET_Y
-  getQuantity     Int?       // For BUY_X_GET_Y
+  buyQuantity     Int?
+  getQuantity     Int?
   isActive        Boolean    @default(true)
   isFirstOrder    Boolean    @default(false)
   startsAt        DateTime   @default(now())
   expiresAt       DateTime?
-  applicableCategories String[] // Category IDs
-  applicableProducts   String[] // Product IDs
+  applicableCategories String[]
+  applicableProducts   String[]
 
   orders Order[]
   usage  CouponUsage[]
@@ -405,7 +410,7 @@ model CouponUsage {
 model LoyaltyTransaction {
   id          String         @id @default(cuid())
   userId      String
-  points      Int            // Positive for earn, negative for redeem
+  points      Int
   action      LoyaltyAction
   description String
   orderId     String?
