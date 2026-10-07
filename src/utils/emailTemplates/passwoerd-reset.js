@@ -4,6 +4,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reset Your Password</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #F5F5F7; font-family: 'Helvetica Neue', Arial, sans-serif;">
@@ -12,6 +13,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
       <td align="center">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="max-width: 600px; background-color: #FFFFFF; border-radius: 16px; overflow: hidden;">
           
+          <!-- Header -->
           <tr>
             <td style="padding: 40px 40px 24px; text-align: center; border-bottom: 1px solid #E5E5E7;">
               <h1 style="margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: 32px; font-weight: 400; letter-spacing: 0.15em; color: #1D1D1F;">
@@ -23,6 +25,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
             </td>
           </tr>
 
+          <!-- Body -->
           <tr>
             <td style="padding: 48px 40px;">
               
@@ -40,6 +43,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
                 Hi ${user.name?.split(" ")[0] || "there"}, we received a request to reset your ZAEM account password.
               </p>
 
+              <!-- CTA Button -->
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin: 32px 0;">
                 <tr>
                   <td align="center">
@@ -50,6 +54,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
                 </tr>
               </table>
 
+              <!-- Info Box -->
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #FFF3E0; border-radius: 12px; margin-bottom: 24px;">
                 <tr>
                   <td style="padding: 20px;">
@@ -63,6 +68,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
                 </tr>
               </table>
 
+              <!-- Security Notice -->
               <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background: #FAFAFA; border-radius: 12px;">
                 <tr>
                   <td style="padding: 20px;">
@@ -73,6 +79,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
                 </tr>
               </table>
 
+              <!-- Fallback Link -->
               <p style="margin: 32px 0 0; font-size: 11px; color: #86868B; text-align: center; line-height: 1.6;">
                 If the button doesn't work, copy and paste this link into your browser:<br>
                 <span style="color: #0A84FF; word-break: break-all; font-size: 10px;">${resetUrl}</span>
@@ -81,6 +88,7 @@ export const passwordResetTemplate = (user, resetUrl) => {
             </td>
           </tr>
 
+          <!-- Footer -->
           <tr>
             <td style="padding: 32px 40px; background: #FAFAFA; border-top: 1px solid #E5E5E7; text-align: center;">
               <p style="margin: 0 0 8px; font-size: 12px; color: #86868B;">

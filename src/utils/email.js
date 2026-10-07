@@ -84,7 +84,7 @@ export async function sendWelcomeEmail(user) {
 // ==================== PASSWORD RESET EMAIL ====================
 export async function sendPasswordResetEmail(user, resetUrl) {
   const { passwordResetTemplate } = await import(
-    "./emailTemplates/passwordReset.js"
+    "./emailTemplates/password-reset.js"
   );
   return sendEmail({
     to: user.email,
