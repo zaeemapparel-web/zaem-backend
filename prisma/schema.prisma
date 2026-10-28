@@ -9,14 +9,72 @@ datasource db {
 }
 
 // ==================== ENUMS ====================
-enum Role { USER ADMIN MANAGER STAFF }
-enum OrderStatus { PENDING CONFIRMED PROCESSING SHIPPED DELIVERED CANCELLED RETURNED }
-enum PaymentMethod { COD JAZZCASH EASYPAISA CARD BANK_TRANSFER }
-enum PaymentStatus { PENDING PAID FAILED REFUNDED }
-enum CouponType { PERCENTAGE FIXED FREE_SHIPPING BUY_X_GET_Y }
-enum LoyaltyTier { BRONZE SILVER GOLD PLATINUM }
-enum LoyaltyAction { ORDER_PLACED REVIEW_WRITTEN PHOTO_REVIEW REFERRAL SIGNUP BIRTHDAY REDEEMED ADMIN_ADJUSTMENT }
-enum NotificationType { ORDER_UPDATE PRICE_DROP BACK_IN_STOCK PROMOTION LOYALTY REVIEW_REPLY }
+// Prisma mein enums hamesha multi-line hone chahiye
+enum Role {
+  USER
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+}
+
+enum PaymentMethod {
+  COD
+  JAZZCASH
+  EASYPAISA
+  CARD
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CouponType {
+  PERCENTAGE
+  FIXED
+  FREE_SHIPPING
+  BUY_X_GET_Y
+}
+
+enum LoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+}
+
+enum LoyaltyAction {
+  ORDER_PLACED
+  REVIEW_WRITTEN
+  PHOTO_REVIEW
+  REFERRAL
+  SIGNUP
+  BIRTHDAY
+  REDEEMED
+  ADMIN_ADJUSTMENT
+}
+
+enum NotificationType {
+  ORDER_UPDATE
+  PRICE_DROP
+  BACK_IN_STOCK
+  PROMOTION
+  LOYALTY
+  REVIEW_REPLY
+}
 
 // ==================== USER ====================
 model User {
@@ -36,6 +94,7 @@ model User {
   tier             LoyaltyTier  @default(BRONZE)
   referralCode     String?      
   referredBy       String?
+  
   addresses       Address[]
   orders          Order[]
   reviews         Review[]
@@ -45,8 +104,10 @@ model User {
   loyaltyHistory  LoyaltyTransaction[]
   notifications   Notification[]
   couponUsage     CouponUsage[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
   @@index([resetToken])
   @@map("users")
 }
@@ -63,8 +124,10 @@ model Address {
   postalCode String
   country    String  @default("Pakistan")
   isDefault  Boolean @default(false)
+  
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   orders Order[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@map("addresses")
@@ -79,9 +142,11 @@ model Category {
   image       String?
   parentId    String?
   isParent    Boolean @default(false)
+  
   parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id], onDelete: Cascade)
   children Category[] @relation("CategoryToCategory")
   products Product[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([parentId])
@@ -104,7 +169,7 @@ model Product {
   sku          String?  @unique
   
   isFeatured   Boolean  @default(false)
-  isNewArrival Boolean  @default(false) // <--- YEH SAHI JAGAH PAR HAI
+  isNewArrival Boolean  @default(false) // ⭐ NAYA FIELD YAHAN HAI
   isActive     Boolean  @default(true)
   
   tags         String[]
@@ -119,6 +184,7 @@ model Product {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
   @@index([categoryId])
   @@index([isFeatured])
   @@index([isNewArrival])
@@ -130,8 +196,10 @@ model Product {
 model Cart {
   id     String @id @default(cuid())
   userId String @unique
+  
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items CartItem[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@map("carts")
@@ -144,8 +212,10 @@ model CartItem {
   quantity  Int    @default(1)
   size      String?
   color     String?
+  
   cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([cartId, productId, size, color])
@@ -185,8 +255,8 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
   @@index([userId])
-  @@index([status])
   @@index([createdAt])
   @@map("orders")
 }
@@ -201,8 +271,10 @@ model OrderItem {
   size      String?
   color     String?
   image     String?
+  
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
+  
   @@map("order_items")
 }
 
@@ -220,9 +292,11 @@ model Review {
   helpfulCount   Int      @default(0)
   adminReply     String?
   adminRepliedAt DateTime?
+  
   user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   helpful ReviewHelpful[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([userId, productId])
@@ -235,8 +309,10 @@ model ReviewHelpful {
   id       String @id @default(cuid())
   reviewId String
   userId   String
+  
   review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   @@unique([reviewId, userId])
   @@map("review_helpful")
@@ -251,8 +327,10 @@ model WishlistItem {
   notifyOnDrop    Boolean   @default(true)
   notifyOnStock   Boolean   @default(true)
   notifiedAt      DateTime?
+  
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   @@unique([userId, productId])
   @@index([userId])
@@ -277,10 +355,13 @@ model Coupon {
   isFirstOrder    Boolean    @default(false)
   startsAt        DateTime   @default(now())
   expiresAt       DateTime?
+  
   applicableCategories String[]
   applicableProducts   String[]
+  
   orders Order[]
   usage  CouponUsage[]
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([code])
@@ -293,8 +374,10 @@ model CouponUsage {
   couponId String
   userId   String
   orderId  String?
+  
   coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   @@index([couponId, userId])
   @@map("coupon_usage")
@@ -309,7 +392,9 @@ model LoyaltyTransaction {
   description String
   orderId     String?
   reviewId    String?
+  
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   @@index([userId])
   @@index([createdAt])
@@ -326,7 +411,9 @@ model Notification {
   link      String?
   imageUrl  String?
   isRead    Boolean          @default(false)
+  
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
   createdAt DateTime @default(now())
   @@index([userId, isRead])
   @@map("notifications")
@@ -337,6 +424,7 @@ model Newsletter {
   id        String   @id @default(cuid())
   email     String   @unique
   isActive  Boolean  @default(true)
+  
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@map("newsletters")
