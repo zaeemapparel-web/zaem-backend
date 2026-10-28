@@ -14,7 +14,7 @@ import wishlistRoutes from './routes/wishlist.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 import { sendEmail } from './utils/email.js';
-
+import uploadRoutes from "./routes/uploadroutes.js";
 const app = express();
 
 // ==================== MIDDLEWARE ====================
@@ -99,7 +99,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/ai', aiRoutes);
-
+app.use('/api/upload', uploadRoutes);
 // ==================== 404 ====================
 
 app.use((req, res) => {
